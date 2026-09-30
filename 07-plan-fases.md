@@ -21,8 +21,17 @@ o escáner USB modo teclado) y la plataforma completa de administración.
 
 ## Fase 2 — Escaneo y operación de campo
 
-- **apk-saci** (móvil): escáner por cámara, cola offline en SQLite, sync contra `/api/sync`
-  (contratos ya definidos en fase 1).
+- **apk-saci (móvil) — NÚCLEO ENTREGADO** ([`rlarquing/apk-saci`](https://github.com/rlarquing/apk-saci),
+  Expo/React Native sobre la plataforma de `apk-sacp`): escáner por cámara con
+  captura de cantidad, registro manual por SKU offline, cola offline en SQLite
+  (ledger + pendientes con reintentos), sync por lotes contra `POST /api/sync`
+  (ítem-por-ítem con errores) y refresco de catálogos por GETs cuando no hay
+  pendientes, stock cacheado para pre-validación de salidas, resumen del día con
+  merge conservador y alertas de bajo mínimo, login offline con credenciales
+  hash y auto-refresh de tokens, panel de administración de caché.
+- Pendiente fase 2 en la APK: build firmado (EAS con URL real del API), assets
+  definitivos de marca (logo) y ajustes/traslados desde el móvil (hoy son del panel
+  web, el sync solo acepta `entrada|salida`).
 - Reset de contraseña seguro (código con expiración + no-enumeración) y plantillas de
   correo con el adapter oficial de `@nestjs-modules/mailer`.
 - Render local de QR en la web (fin de la dependencia de preview externo).

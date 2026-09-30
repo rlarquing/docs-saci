@@ -17,6 +17,7 @@ sync offline, sockets, Docker) y sustituye el dominio de parqueos por el de inve
 | Documentación | **docs-saci** (este repo) | Markdown |
 | API backend | **api-saci** | NestJS 11 + TypeORM (MongoDB) + JWT + QR/PDF |
 | Panel web | **web-saci** | Next.js 16 (App Router) + React 19 + Tailwind 4 + shadcn/Base-UI |
+| App móvil | **apk-saci** | Expo SDK 57 + React Native 0.86 + SQLite (offline-first) + escáner QR |
 
 ## Documentos
 
