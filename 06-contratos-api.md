@@ -69,6 +69,45 @@ procesa ítem por ítem, devuelve `{procesados, errores: SyncErrorDto[], product
 
 Todos filtran por `user.almacenIds` (scoping heredado de SACP).
 
+### Conteo cíclico (backlog P1 — implementado)
+Vertical completo api+web+apk. Un conteo congela el stock esperado por producto
+al abrir, se cuenta (opcionalmente a ciegas) y al cerrar genera movimientos de
+AJUSTE auditables por cada diferencia contra el stock real. Reglas: **un solo
+conteo `ABIERTO` por almacén**, cierre solo con **todas las líneas contadas**.
+
+| Método | Ruta | Roles | Contenido |
+|---|---|---|---|
+| POST | `/conteo-inventario` | ADMIN, JEFE | Abrir conteo `{almacenId, esCiego}` → snapshot de stock esperado |
+| GET | `/conteo-inventario` | ADMIN, JEFE, OPERARIO | Listado paginado (`almacenId`, `estado`, `sinPaginacion`) |
+| GET | `/conteo-inventario/:id` | ADMIN, JEFE, OPERARIO | Detalle con `lineas[]` embebidas |
+| PUT | `/conteo-inventario/:id/linea` | ADMIN, JEFE, OPERARIO | Registrar cantidad contada `{productoId, cantidadContada}` (0 válido) |
+| PATCH | `/conteo-inventario/:id/cerrar` | ADMIN, JEFE | Recalcula stock real, crea AJUSTES (±) y congela `resumen` |
+| PATCH | `/conteo-inventario/:id/cancelar` | ADMIN, JEFE | Descarta el conteo sin ajustes |
+| GET | `/conteo-inventario/:id/exportar` | ADMIN, JEFE | Informe CSV del conteo (esperado/contado/diferencia/ajustado) |
+
+La línea devuelve `{id, successStatus, message}`; al cerrar, el message resume
+los ajustes generados (`sobrantes`, `faltantes`, `errores` por línea).
+
+### Fotos de producto (backlog P1 — implementado)
+| Método | Ruta | Roles | Contenido |
+|---|---|---|---|
+| PUT | `/producto/:id/foto` | ADMIN, JEFE | Data URL `data:image/jpeg;base64,…` (cliente comprime a ≤512px, límite 900 KB) |
+| GET | `/producto-foto/:id` | **público** | Binario de la foto (`Cache-Control 24 h`); 404 si no tiene |
+
+El listado de productos nunca devuelve el base64: entrega `hasFoto` booleano y
+la imagen se consume por la URL pública. `GET /producto` ahora responde el
+`ListadoDto` estándar (header/key) con la columna `hasFoto`. El sync de la APK
+sigue sin incluir fotos (payload ligero; la APK las pide por URL).
+
+### Exportes CSV (backlog P1 — implementado)
+Separador `;` + BOM UTF-8 (Excel es-ES), descarga con `Content-Disposition`.
+
+| Método | Ruta | Contenido |
+|---|---|---|
+| GET | `/movimiento-inventario/exportar?almacenId=&tipo=` | Kardex completo (tope 10.000 filas) |
+| GET | `/movimiento-inventario/stock/exportar?almacenId=` | Stock derivado por producto/almacén |
+| GET | `/conteo-inventario/:id/exportar` | Informe del conteo con diferencias |
+
 ## Admin (heredado, contratos idénticos a SACP)
 
 - `/user`, `/rol`, `/funcion`, `/menu`, `/log-history` con el CRUD genérico completo

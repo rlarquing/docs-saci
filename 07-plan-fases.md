@@ -35,14 +35,17 @@ o escáner USB modo teclado) y la plataforma completa de administración.
 - Reset de contraseña seguro (código con expiración + no-enumeración) y plantillas de
   correo con el adapter oficial de `@nestjs-modules/mailer`.
 - Render local de QR en la web (fin de la dependencia de preview externo).
-- Imágenes de producto, etiquetas con logo del cliente.
-- Export Excel de kardex/stock (pdfkit ya está para PDF).
+- Etiquetas con logo del cliente. *(Imágenes de producto y exportes CSV/Excel de
+  kardex/stock: **ADELANTADOS — ya implementados** en el backlog P1, ver doc 08 y doc 06.)*
 
 ## Fase 3 — Inventario avanzado
 
 - Lotes por vencimiento y series individuales (número de serie por unidad).
 - Proveedores y órdenes de compra/venta con estados.
-- Conteos físicos cíclicos asistidos (plan de conteo + ajustes automáticos).
+- ~~Conteos físicos cíclicos asistidos (plan de conteo + ajustes automáticos).~~
+  **ADELANTADO — ya implementado** (backlog P1 del análisis de apps, ver doc 08):
+  conteo por almacén con snapshot de stock esperado, conteo a ciegas opcional,
+  informe de diferencias y ajustes auditables automáticos (doc 06).
 - Valorización (costo promedio ponderado / FIFO) y reportes financieros.
 - BI fase 2: rotación por producto, cobertura de stock, predicción de quiebres.
 

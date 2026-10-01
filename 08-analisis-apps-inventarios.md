@@ -1,6 +1,6 @@
 # 08 — Análisis de apps de inventarios y backlog de funcionalidades
 
-> **Versión**: 1.0 · **Fecha**: 2026-10-01
+> **Versión**: 1.1 · **Fecha**: 2026-10-01 · **Estado P1: IMPLEMENTADO** (api `56a3447`, web `d4fd044`, apk `aa02530`)
 > **Objetivo**: benchmark de apps profesionales de gestión de inventarios (con foco en
 > QR/código de barras y operación móvil) para detectar funcionalidades que eleven a SACI
 > a nivel profesional, y proponer un backlog priorizado y realista contra la arquitectura actual.
@@ -75,12 +75,12 @@ operación de almacén (escaneo, offline, conteo cíclico, alertas). Fuentes pri
 > Criterios: impacto operativo real primero, esfuerzo después, y aprovechamiento de lo ya
 > construido (movimientos inmutables, stock derivado, nomencladores, sync offline, roles).
 
-### P1 — núcleo profesional (alta rotación de uso)
+### P1 — núcleo profesional (alta rotación de uso) ✅ IMPLEMENTADO
 | # | Funcionalidad | Repos | Notas de implementación |
 |---|---|---|---|
-| 1 | **Conteo cíclico con informe de diferencias** | api + web + apk | Nuevo documento `conteo` (asignación por almacén/usuario, estado abierto/cerrado). La APK permite escanear y registrar cantidades contadas (a ciegas opcional). Al cerrar: diff esperado vs contado → genera movimientos de AJUSTE auditables. Reutiliza el flujo offline/pendientes existente |
-| 2 | **Exportes CSV/Excel** de stock, movimientos y conteos | web (o api) | Endpoint de exporte con filtros ya existentes; botones en dashboard/listados. Cero impacto en dominio |
-| 3 | **Fotos por producto** | api + web + apk | Campo imagen en producto; subida desde web y APK (compresión cliente); miniatura en listados y en el resultado del escaneo (identificación visual instantánea, patrón Sortly) |
+| 1 | **Conteo cíclico con informe de diferencias** ✅ | api + web + apk | Módulo `conteo-inventario`: abrir (snapshot de stock esperado), líneas embebidas, cierre que recalcula stock real y genera movimientos de AJUSTE auditables; a ciegas opcional; un conteo abierto por almacén; informe CSV. Web: `/admin/conteos` (+ `show/[id]`) con menú «Conteos». APK: pantallas `conteos`/`conteo-activo` con escáner y búsqueda por SKU (online-only por diseño). Ver contratos en doc 06 |
+| 2 | **Exportes CSV/Excel** de stock, movimientos y conteos ✅ | web (o api) | Endpoints `movimiento-inventario/exportar`, `movimiento-inventario/stock/exportar` y `conteo-inventario/:id/exportar` (separador `;` + BOM, patrón buffer→`@Res`). Web: botones «Exportar CSV» en kardex, stock y conteos vía descarga autenticada |
+| 3 | **Fotos por producto** ✅ | api + web + apk | `foto` (data URL ≤900 KB) en la entidad; `PUT /producto/:id/foto` y servidor público `GET /producto-foto/:id` (cache 24 h); `hasFoto` en listados (nunca base64). Web: subida con compresión canvas (512px JPEG) en la ficha + miniatura en el listado. APK: foto en el modal del escáner (URL pública) |
 
 ### P2 — alertas y velocidad de operación
 | # | Funcionalidad | Repos | Notas |
@@ -106,3 +106,16 @@ operación de almacén (escaneo, offline, conteo cíclico, alertas). Fuentes pri
 3. Todo el backlog es implementable **sin romper** los invariantes actuales (movimientos
    inmutables, stock derivado, sync por lotes); el conteo cíclico es el único que añade un
    documento de dominio nuevo, y se apoya en el mecanismo de ajuste existente.
+
+## 6. Nota de despliegue del P1
+
+- **Menú web**: la entrada «Conteos» se siembra en `menuService.crearMenuInventario()` al
+  arrancar la API en dev. En producción hay que resear los menús (o insertar la entrada
+  manualmente) para que la ruta `/admin/conteos` supere el guard de menús del panel.
+- **Endpoints/permisos**: el guard de permisos de los nuevos endpoints se autorrega
+  en dev vía `parseController`; revisar las funciones/roles asignados a los usuarios
+  no-admin tras actualizar.
+- **APK**: el conteo es deliberadamente ONLINE-ONLY (compara contra el stock real del
+  API; no se encola ni se cachea). Sin conexión la operación se bloquea con aviso.
+- **Base de datos**: no requiere migración en MongoDB (nueva colección `conteo_inventario`
+  y campo `foto` en `producto` se crean al vuelo).
