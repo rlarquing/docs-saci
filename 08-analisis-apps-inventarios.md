@@ -82,12 +82,12 @@ operación de almacén (escaneo, offline, conteo cíclico, alertas). Fuentes pri
 | 2 | **Exportes CSV/Excel** de stock, movimientos y conteos ✅ | web (o api) | Endpoints `movimiento-inventario/exportar`, `movimiento-inventario/stock/exportar` y `conteo-inventario/:id/exportar` (separador `;` + BOM, patrón buffer→`@Res`). Web: botones «Exportar CSV» en kardex, stock y conteos vía descarga autenticada |
 | 3 | **Fotos por producto** ✅ | api + web + apk | `foto` (data URL ≤900 KB) en la entidad; `PUT /producto/:id/foto` y servidor público `GET /producto-foto/:id` (cache 24 h); `hasFoto` en listados (nunca base64). Web: subida con compresión canvas (512px JPEG) en la ficha + miniatura en el listado. APK: foto en el modal del escáner (URL pública) |
 
-### P2 — alertas y velocidad de operación
-| # | Funcionalidad | Repos | Notas |
+### P2 — alertas y velocidad de operación ✅ IMPLEMENTADO
+| # | Funcionalidad | Repos | Notas de implementación |
 |---|---|---|---|
-| 4 | **Safety stock + punto de reorden por producto/almacén** con push | api + web + apk | Generaliza el "stock mínimo" actual a niveles configurables por ubicación (patrón BoxHero). Push vía expo-notifications + email digerido diario |
-| 5 | **Modo ráfaga (multi-scan) en la APK** | apk | Tras cada escaneo exitoso, volver directo a cámara sin modal de confirmación (contador acumulado en pantalla); confirmación por lote al final. Ideal para entradas masivas de recepción |
-| 6 | **Timeline por producto/etiqueta** | web (+apk) | Vista cronológica legible del historial de movimientos de un producto o etiqueta concreta (los datos ya existen: es solo presentación + filtro) |
+| 4 | **Safety stock + punto de reorden por producto/almacén** con push ✅ | api + web + apk | Nueva entidad `nivel_stock` (1 nivel activo por producto+almacén, CRUD ADMIN/JEFE, menú «Niveles») + `stockSeguridad` global en producto como fallback; punto de reorden = mínimo + seguridad. `bajo-minimo` (movimientos y BI) devuelve `puntoReorden/sugerido/estado (BAJO_MINIMO\|REORDEN)` con umbral efectivo. Push: evento socket `notificacion` al cruzar el umbral → campana en el header web (alertas activas + toast en vivo) y notificaciones locales `expo-notifications` en la APK (solo productos recién caídos, DB v4 con `niveles_stock_cache`). Digerido diario por email a los admins con cron 07:00 (`EMAIL_DIGEST=true`) |
+| 5 | **Modo ráfaga (multi-scan) en la APK** ✅ | apk | En el escáner: sin modal de confirmación, cada lectura suma +1 al acumulador de sesión y rearma la cámara automáticamente (guard de 2s anti-doble-lectura, vibración y aviso); panel con ajuste +/−/quitar, SKU manual y pre-validación de stock en salidas; «Registrar lote» crea un movimiento por producto con la cantidad acumulada reutilizando el mismo flujo (online u offline→pendientes) |
+| 6 | **Timeline por producto/etiqueta** ✅ | web (+apk) | Nuevo filtro `productoId` (y `almacenId`) en `GET /movimiento-inventario` (paginado, fecha DESC). Web: página `show/[id]` de producto con ficha (foto, punto de reorden global) y timeline cronológico con icono/color por tipo, saldo, QR, usuario y observaciones + refresco en vivo por socket; acceso con el botón «Ver» del listado. APK: pantalla `historial` (búsqueda por SKU del cache + timeline del servidor, online-only) accesible desde el header del dashboard |
 
 ### P3 — profundidad de catálogo (fase 2+ del plan)
 | # | Funcionalidad | Repos | Notas |
@@ -107,8 +107,22 @@ operación de almacén (escaneo, offline, conteo cíclico, alertas). Fuentes pri
    inmutables, stock derivado, sync por lotes); el conteo cíclico es el único que añade un
    documento de dominio nuevo, y se apoya en el mecanismo de ajuste existente.
 
-## 6. Nota de despliegue del P1
+## 6. Nota de despliegue del P2
 
+- **Menú web**: la entrada «Niveles» se siembra en `crearMenuInventario()`; en producción hay que
+  resear los menús (o insertar la entrada manualmente) para que `/admin/niveles` supere el guard.
+- **APK**: la base local sube a **versión 4** (tablas cache purgadas y re-descargadas en la primera
+  sync; sesión preservada). `expo-notifications` añade un módulo nativo → hay que regenerar el
+  binario (prebuild/EAS); en Expo Go funciona sin cambios.
+- **Email digerido**: desactivado por defecto. Activar con `EMAIL_DIGEST=true` en el `.env` de la
+  API (requiere el SMTP ya configurado para la recuperación de contraseña).
+- **Semántica de alertas**: `bajo-minimo` ahora dispara desde el **punto de reorden** (mínimo +
+  seguridad). Con seguridad 0 el comportamiento coincide con el anterior (solo `stock < mínimo`).
+- **Base de datos**: no requiere migración en MongoDB (nueva colección `nivel_stock` y campo
+  `stockSeguridad` en `producto` se crean al vuelo; Mongo rellena `stockSeguridad=0` al vuelo en
+  los lectores con `?? 0`).
+
+## 7. Nota de despliegue del P1
 - **Menú web**: la entrada «Conteos» se siembra en `menuService.crearMenuInventario()` al
   arrancar la API en dev. En producción hay que resear los menús (o insertar la entrada
   manualmente) para que la ruta `/admin/conteos` supere el guard de menús del panel.

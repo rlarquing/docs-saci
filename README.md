@@ -32,7 +32,7 @@ sync offline, sockets, Docker) y sustituye el dominio de parqueos por el de inve
 | 05 | [Reglas de negocio](05-reglas-negocio.md) | Ciclo de vida del QR, semántica de movimientos, cálculo de stock, matriz de roles |
 | 06 | [Contratos de API](06-contratos-api.md) | Endpoints del dominio de inventario + contratos admin heredados |
 | 07 | [Plan de fases](07-plan-fases.md) | Fase 1 (este repo), fase 2+ (escáner móvil, lotes/vencimientos, reportes) |
-| 08 | [Análisis de apps de inventarios](08-analisis-apps-inventarios.md) | Benchmark (Sortly, BoxHero, Zoho, Odoo, conteo cíclico) + backlog priorizado |
+| 08 | [Análisis de apps de inventarios](08-analisis-apps-inventarios.md) | Benchmark (Sortly, BoxHero, Zoho, Odoo, conteo cíclico) + backlog priorizado — **P1 y P2 ya implementados** |
 
 ## Marca
 

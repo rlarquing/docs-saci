@@ -21,6 +21,13 @@ o escáner USB modo teclado) y la plataforma completa de administración.
 
 ## Fase 2 — Escaneo y operación de campo
 
+- **Backlog P2 del análisis de apps — ADELANTADO E IMPLEMENTADO** (doc 08 y contratos en doc 06):
+  niveles de stock por producto/almacén (safety stock + punto de reorden, módulo `/admin/niveles`
+  y umbral efectivo en bajo-mínimo/BI), push de alertas (evento socket `notificacion` con campana
+  en la web y notificaciones locales `expo-notifications` en la APK), modo ráfaga multi-scan en la
+  APK (acumulador de sesión + confirmación por lote) y timeline por producto (filtro `productoId`
+  del kardex + `show` de producto en web + pantalla `historial` en APK). Digerido diario por email
+  opcional (`EMAIL_DIGEST=true`).
 - **apk-saci (móvil) — NÚCLEO ENTREGADO** ([`rlarquing/apk-saci`](https://github.com/rlarquing/apk-saci),
   Expo/React Native sobre la plataforma de `apk-sacp`): escáner por cámara con
   captura de cantidad, registro manual por SKU offline, cola offline en SQLite
@@ -53,7 +60,9 @@ o escáner USB modo teclado) y la plataforma completa de administración.
 
 - Multi-empresa (tenancy), SSO opcional.
 - Métricas con Prometheus/Grafana, alertamiento operativo.
-- PWA instalable del operario con notificaciones push de alertas.
+- PWA instalable del operario con notificaciones push de alertas. *(El push de alertas de stock
+  ya está cubierto en el P2: socket `notificacion` en web y notificaciones locales en la APK; la
+  PWA instalable y el push cuando la app está cerrada siguen abiertos.)*
 
 ## Decisiones abiertas (propietario)
 

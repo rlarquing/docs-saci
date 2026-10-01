@@ -46,9 +46,9 @@ Autenticación: `Authorization: Bearer <accessToken>` en todo excepto auth y hea
 | POST | `/movimiento-inventario/salida` | valida stock suficiente (409 si excede) |
 | POST | `/movimiento-inventario/ajuste` | JEFE+: `{productoId, almacenId, cantidad±, observaciones!}` |
 | POST | `/movimiento-inventario/traslado` | `{productoId, cantidad, almacenOrigenId, almacenDestinoId}` (par compensado) |
-| GET | `/movimiento-inventario` | kardex paginado con filtros (producto, almacén, tipo, rango fechas) |
+| GET | `/movimiento-inventario` | kardex paginado; con `?productoId=&almacenId=` devuelve el **timeline** del producto (orden fecha DESC, P2) |
 | GET | `/movimiento-inventario/stock` | `?productoId&almacenId` → stock derivado por agregación |
-| GET | `/movimiento-inventario/bajo-minimo` | alertas `stock < stockMinimo` |
+| GET | `/movimiento-inventario/bajo-minimo` | productos bajo el **punto de reorden** con umbral efectivo (`nivel_stock` > global): `{stock, stockMinimo, stockSeguridad, puntoReorden, sugerido, estado: BAJO_MINIMO\|REORDEN}` (P2) |
 | POST | `/movimiento-inventario/estado` | batch `{codigos[]}` (máx 100) → estado de cada QR |
 
 ### Registro diario
@@ -57,7 +57,9 @@ Autenticación: `Authorization: Bearer <accessToken>` en todo excepto auth y hea
 
 ### Sync offline
 `POST /api/sync` → `{movimientosPendientes: [{id, operacion, data, createdAt}]}` →
-procesa ítem por ítem, devuelve `{procesados, errores: SyncErrorDto[], productos, stock}`.
+procesa ítem por ítem, devuelve `{procesados, errores: SyncErrorDto[], productos, stock, niveles}`.
+Los productos del sync incluyen `stockSeguridad`; `niveles` trae los `nivel_stock` de los almacenes
+del usuario (la APK los cachea en `niveles_stock_cache`, DB v4).
 
 ### Dashboard (BI fase 1)
 | Método | Ruta | Contenido |
@@ -98,6 +100,27 @@ El listado de productos nunca devuelve el base64: entrega `hasFoto` booleano y
 la imagen se consume por la URL pública. `GET /producto` ahora responde el
 `ListadoDto` estándar (header/key) con la columna `hasFoto`. El sync de la APK
 sigue sin incluir fotos (payload ligero; la APK las pide por URL).
+
+### Niveles de stock y push (backlog P2 — implementado)
+**Safety stock por ubicación** (patrón BoxHero): el punto de reorden = `stockMinimo + stockSeguridad`.
+El umbral efectivo de un producto en un almacén es el del `nivel_stock` específico si existe;
+si no, los globales del producto (`stockSeguridad` añadido a `producto`, fallback 0).
+
+| Método | Ruta | Roles | Notas |
+|---|---|---|---|
+| GET | `/nivel-stock` | ADMIN, JEFE, OPERARIO | Listado paginado (`almacenId`, `productoId`, `sinPaginacion`); filas con `puntoReorden` calculado |
+| GET | `/nivel-stock/:id` | ADMIN, JEFE, OPERARIO | Detalle |
+| POST | `/nivel-stock` | ADMIN, JEFE | `{productoId, almacenId, stockMinimo?, stockSeguridad?}`; 1 nivel activo por par producto+almacén (409 si duplica) |
+| PUT | `/nivel-stock/:id` | ADMIN, JEFE | Actualiza umbrales |
+| DELETE | `/nivel-stock/:id` | ADMIN, JEFE | Soft-delete |
+
+**Push**: al registrar un movimiento (entrada/salida/ajuste/traslado), si el stock **cruza** el punto
+de reorden (antes ≥ punto, después < punto) la API emite el evento socket **`notificacion`** con
+`{tipo: BAJO_MINIMO\|REORDEN, producto*, almacen*, stock, stockMinimo, stockSeguridad, puntoReorden,
+sugerido, timestamp}`. La web lo consume en la campana del header (toast + lista con badge de no leídas);
+la APK genera **notificaciones locales** (expo-notifications) solo para productos recién caídos bajo umbral.
+**Digerido diario**: cron 07:00 (`EMAIL_DIGEST=true` en el `.env`) envía a los ADMINISTRADOR activos un
+email HTML con la lista completa de productos bajo punto de reorden.
 
 ### Exportes CSV (backlog P1 — implementado)
 Separador `;` + BOM UTF-8 (Excel es-ES), descarga con `Content-Disposition`.
