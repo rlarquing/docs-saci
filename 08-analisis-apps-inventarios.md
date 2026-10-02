@@ -1,6 +1,7 @@
 # 08 — Análisis de apps de inventarios y backlog de funcionalidades
 
-> **Versión**: 1.1 · **Fecha**: 2026-10-01 · **Estado P1: IMPLEMENTADO** (api `56a3447`, web `d4fd044`, apk `aa02530`)
+> **Versión**: 1.2 · **Fecha**: 2026-10-01 · **Estado P1: IMPLEMENTADO** (api `f6e7bfa`/`56a3447`, web `d4fd044`, apk `aa02530`) ·
+> **Estado P2: IMPLEMENTADO** (api `241fc9e`, web `9826911`, apk `93b6fd8`) · **Estado P3: IMPLEMENTADO** (api `e09c4e8`, web `77dac83`, apk `74f853e`)
 > **Objetivo**: benchmark de apps profesionales de gestión de inventarios (con foco en
 > QR/código de barras y operación móvil) para detectar funcionalidades que eleven a SACI
 > a nivel profesional, y proponer un backlog priorizado y realista contra la arquitectura actual.
@@ -89,12 +90,12 @@ operación de almacén (escaneo, offline, conteo cíclico, alertas). Fuentes pri
 | 5 | **Modo ráfaga (multi-scan) en la APK** ✅ | apk | En el escáner: sin modal de confirmación, cada lectura suma +1 al acumulador de sesión y rearma la cámara automáticamente (guard de 2s anti-doble-lectura, vibración y aviso); panel con ajuste +/−/quitar, SKU manual y pre-validación de stock en salidas; «Registrar lote» crea un movimiento por producto con la cantidad acumulada reutilizando el mismo flujo (online u offline→pendientes) |
 | 6 | **Timeline por producto/etiqueta** ✅ | web (+apk) | Nuevo filtro `productoId` (y `almacenId`) en `GET /movimiento-inventario` (paginado, fecha DESC). Web: página `show/[id]` de producto con ficha (foto, punto de reorden global) y timeline cronológico con icono/color por tipo, saldo, QR, usuario y observaciones + refresco en vivo por socket; acceso con el botón «Ver» del listado. APK: pantalla `historial` (búsqueda por SKU del cache + timeline del servidor, online-only) accesible desde el header del dashboard |
 
-### P3 — profundidad de catálogo (fase 2+ del plan)
-| # | Funcionalidad | Repos | Notas |
+### P3 — profundidad de catálogo ✅ IMPLEMENTADO
+| # | Funcionalidad | Repos | Notas de implementación |
 |---|---|---|---|
-| 7 | **Lotes y caducidad por movimiento** | api + web + apk | Ya está anunciado en 07-plan-fases; añade alertas de próximo a vencer |
-| 8 | **Variantes de producto** | api + web | SKU padre + variantes (talla/color); requiere migración de catálogo y de etiquetas |
-| 9 | **Ubicación interna (bin) por producto** | api + web + apk | El nomenclador de ubicaciones ya existe; falta el vínculo producto→bin por almacén y su reflejo en la ficha del escaneo |
+| 7 | **Lotes y caducidad por movimiento** ✅ | api + web + apk | `lote` (≤50) y `fechaCaducidad` opcionales e INMUTABLES en `movimiento_inventario` (se estampan en entrada/salida/ajuste/traslado; el traslado lleva el lote a ambas patas). **Stock por lote**: agregación por (producto, almacén, lote, caducidad) con la MISMA semántica de signos del stock global (Σ lotes = stock total); `GET /movimiento-inventario/lotes` con `estado (VENCIDO\|PROXIMO\|OK\|SIN_CADUCIDAD)` y `diasParaVencer` (ventana `diasProximo` default 30), + CSV. Web: página `/admin/lotes` (menú «Lotes y vencimientos», filtros almacén/ventana, badges semafóricos, exportar CSV) y lote/caducidad en el form de ENTRADA/AJUSTE, kardex y timeline. APK: captura opcional de lote/caducidad en la ficha del escáner (solo ENTRADA; el modo ráfaga no captura lote por diseño), badges en el historial y card «Próximos a vencer» (online). **Alertas**: lotes vencidos/por vencer (30 días) en el sync de la APK y sección «Lotes en alerta de caducidad» en el digest diario |
+| 8 | **Variantes de producto** ✅ | api + web | Patrón Zoho: cada variante es un producto COMPLETO (SKU, stock, kardex y QR propios) con `productoPadreId` + `atributos (JSON)` + `atributosResumen` denormalizado; el nombre se deriva (`Padre (Talla: M · Color: Rojo)`). `POST /producto/:id/variantes` (hereda categoría/unidad/umbrales; 1 nivel de agrupación; unicidad de combinación), `GET /producto/:id/variantes`, `PUT /producto/:id/atributos`. Web: sección «Variantes» en la ficha (editor clave/valor dinámico, enlace al padre, badge de resumen) y columna «Variante» en el listado. Cero migración de etiquetas: un QR de variante es un QR de producto |
+| 9 | **Ubicación interna (bin) por producto** ✅ | api + web + apk | Nueva entidad `producto_ubicacion` (1 bin ACTIVO por par producto+almacén, CRUD ADMIN/JEFE) con denormalizados; valida que el bin pertenezca al almacén. Endpoints `producto-ubicacion` (listado/por-producto/**resolver**/select-ubicaciones/POST/PUT/DELETE). Web: sección «Ubicaciones» en la ficha (combos dependientes almacén→bin, asignar/reasignar/quitar), columna «Bin» en stock y en su CSV. APK: bin en la ficha del escáner y en el panel de ráfaga (resolver online + cache `producto_ubicacion_cache` DB v5 vía `bins` del sync) |
 
 ## 5. Conclusiones
 
@@ -106,6 +107,29 @@ operación de almacén (escaneo, offline, conteo cíclico, alertas). Fuentes pri
 3. Todo el backlog es implementable **sin romper** los invariantes actuales (movimientos
    inmutables, stock derivado, sync por lotes); el conteo cíclico es el único que añade un
    documento de dominio nuevo, y se apoya en el mecanismo de ajuste existente.
+4. Con el P3, el backlog del benchmark queda **cerrado al 100 %**: lotes/caducidad, variantes
+   y bins ya son parte del producto y los tres invariantes siguen intactos (lote/caducidad son
+   campos del movimiento inmutable; el stock por lote es derivado; el bin viaja en el sync).
+
+## 5b. Nota de despliegue del P3
+
+- **Menú web**: la entrada «Lotes y vencimientos» se siembra en `crearMenuInventario()` apuntando
+  a `/admin/lotes`; en producción hay que resear los menús (o insertarla manualmente) para que
+  supere el guard.
+- **Endpoints/permisos**: `/movimiento-inventario/lotes*` y `/producto-ubicacion/*` se autorregistran
+  en dev vía `parseController`; revisar funciones/roles de usuarios no-admin tras actualizar.
+- **Base de datos**: no requiere migración en MongoDB (colección `producto_ubicacion`, campos
+  `lote`/`fechaCaducidad` en `movimiento_inventario` y `productoPadreId`/`atributos*` en `producto`
+  se crean al vuelo; los lectores tratan ausentes como null/0).
+- **APK**: la base local sube a **versión 5** (tablas cache purgadas y re-descargadas en la primera
+  sync; sesión preservada). Sin módulos nativos nuevos: no hace falta regenerar binario.
+- **Semántica de lotes**: Σ stock por lote = stock total por producto/almacén (misma agregación que
+  el stock global). Los movimientos sin lote forman el grupo «(sin lote)». Solo se listan lotes con
+  stock vivo > 0.
+- **Modo ráfaga**: deliberadamente SIN captura de lote (velocidad); para recepción con lote usar el
+  modo normal del escáner o la web.
+- **Digest**: la sección de caducidad viaja en el mismo email del P2 (`EMAIL_DIGEST=true`); no hay
+  flag separado.
 
 ## 6. Nota de despliegue del P2
 

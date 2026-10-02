@@ -47,7 +47,18 @@ o escáner USB modo teclado) y la plataforma completa de administración.
 
 ## Fase 3 — Inventario avanzado
 
-- Lotes por vencimiento y series individuales (número de serie por unidad).
+- ~~Lotes por vencimiento y series individuales (número de serie por unidad).~~
+  **Lotes/caducidad — IMPLEMENTADO** (backlog P3 del análisis de apps, ver doc 08 y doc 06):
+  `lote` + `fechaCaducidad` opcionales e inmutables en cada movimiento, stock derivado por lote
+  con estado VENCIDO/PROXIMO/OK, alertas en la web (`/admin/lotes` + menú «Lotes y vencimientos»),
+  sección en el digest diario, card «Próximos a vencer» en la APK y CSV de lotes.
+  *(Las series individuales por unidad siguen abiertas.)*
+- **Variantes de producto — IMPLEMENTADO** (backlog P3): SKU padre + variantes con atributos
+  (talla/color/modelo); cada variante es un producto completo con SKU/stock/QR propios (`productoPadreId`),
+  gestión desde la ficha del producto en la web y columna «Variante» en el listado.
+- **Ubicaciones internas (bin) por producto — IMPLEMENTADO** (backlog P3): vínculo producto→bin
+  por almacén (`producto_ubicacion`), gestión en la ficha web, columna Bin en stock y CSV,
+  y reflejo en la ficha del escáner (online por resolver + offline por cache DB v5).
 - Proveedores y órdenes de compra/venta con estados.
 - ~~Conteos físicos cíclicos asistidos (plan de conteo + ajustes automáticos).~~
   **ADELANTADO — ya implementado** (backlog P1 del análisis de apps, ver doc 08):
@@ -70,5 +81,6 @@ o escáner USB modo teclado) y la plataforma completa de administración.
    barato y centralizado.
 2. **SKU generado vs. código del cliente** — fase 1 genera `PRD-000001`; si el cliente
    usa códigos propios (EAN), permitir código externo único.
-3. **Ubicaciones**: ¿rastrear stock por ubicación física en fase 2? (el modelo ya tiene
-   el catálogo; el stock por ubicación añadiría dimensión al movimiento).
+3. ~~**Ubicaciones**: ¿rastrear stock por ubicación física en fase 2?~~ — El vínculo
+   producto→bin por almacén ya está implementado (backlog P3, `producto_ubicacion`);
+   el stock como dimensión del MOVIMIENTO (bin en entrada/salida) sigue abierto para fase 4+.

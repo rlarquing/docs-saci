@@ -42,13 +42,15 @@ Autenticación: `Authorization: Bearer <accessToken>` en todo excepto auth y hea
 ### Movimientos de inventario
 | Método | Ruta | Notas |
 |---|---|---|
-| POST | `/movimiento-inventario/entrada` | `{qrCodigo \| productoId, almacenId, cantidad, fecha?}` |
-| POST | `/movimiento-inventario/salida` | valida stock suficiente (409 si excede) |
-| POST | `/movimiento-inventario/ajuste` | JEFE+: `{productoId, almacenId, cantidad±, observaciones!}` |
-| POST | `/movimiento-inventario/traslado` | `{productoId, cantidad, almacenOrigenId, almacenDestinoId}` (par compensado) |
-| GET | `/movimiento-inventario` | kardex paginado; con `?productoId=&almacenId=` devuelve el **timeline** del producto (orden fecha DESC, P2) |
-| GET | `/movimiento-inventario/stock` | `?productoId&almacenId` → stock derivado por agregación |
+| POST | `/movimiento-inventario/entrada` | `{qrCodigo \| productoId, almacenId, cantidad, fecha?, lote?, fechaCaducidad?}` (P3) |
+| POST | `/movimiento-inventario/salida` | valida stock suficiente (409 si excede); `lote?/fechaCaducidad?` (P3) |
+| POST | `/movimiento-inventario/ajuste` | JEFE+: `{productoId, almacenId, cantidad±, observaciones!}`; `lote?/fechaCaducidad?` (P3) |
+| POST | `/movimiento-inventario/traslado` | `{productoId, cantidad, almacenOrigenId, almacenDestinoId, lote?, fechaCaducidad?}` (par compensado, el lote viaja a ambas patas) |
+| GET | `/movimiento-inventario` | kardex paginado; con `?productoId=&almacenId=` devuelve el **timeline** del producto (orden fecha DESC, P2); filas con `lote`/`fechaCaducidad` (P3) |
+| GET | `/movimiento-inventario/stock` | `?productoId&almacenId` → stock derivado por agregación, filas con `ubicacionNombre` (bin del producto en ese almacén, P3) |
 | GET | `/movimiento-inventario/bajo-minimo` | productos bajo el **punto de reorden** con umbral efectivo (`nivel_stock` > global): `{stock, stockMinimo, stockSeguridad, puntoReorden, sugerido, estado: BAJO_MINIMO\|REORDEN}` (P2) |
+| GET | `/movimiento-inventario/lotes` | **stock por lote** (P3): agrega por (producto, almacén, lote, caducidad) con la misma semántica de signos; solo stock > 0; `?almacenId=&productoId=&diasProximo=30` → filas `{lote, fechaCaducidad, stock, estado: VENCIDO\|PROXIMO\|OK\|SIN_CADUCIDAD, diasParaVencer}` ordenadas vencidos→próximos→OK→sin caducidad |
+| GET | `/movimiento-inventario/lotes/exportar` | CSV del stock por lote (mismos filtros) |
 | POST | `/movimiento-inventario/estado` | batch `{codigos[]}` (máx 100) → estado de cada QR |
 
 ### Registro diario
@@ -57,14 +59,15 @@ Autenticación: `Authorization: Bearer <accessToken>` en todo excepto auth y hea
 
 ### Sync offline
 `POST /api/sync` → `{movimientosPendientes: [{id, operacion, data, createdAt}]}` →
-procesa ítem por ítem, devuelve `{procesados, errores: SyncErrorDto[], productos, stock, niveles}`.
+procesa ítem por ítem, devuelve `{procesados, errores: SyncErrorDto[], productos, stock, niveles, bins, lotesProximos}`.
 Los productos del sync incluyen `stockSeguridad`; `niveles` trae los `nivel_stock` de los almacenes
-del usuario (la APK los cachea en `niveles_stock_cache`, DB v4).
+(del usuario, DB v4); `bins` trae los vínculos producto→ubicación de sus almacenes y `lotesProximos`
+los lotes vencidos o por vencer en 30 días (P3, cacheados en DB v5).
 
 ### Dashboard (BI fase 1)
 | Método | Ruta | Contenido |
 |---|---|---|
-| GET | `/bi/dashboard` | KPIs: stock total por almacén, movimientos hoy (entradas/salidas), productos, bajo mínimo, últimos movimientos |
+| GET | `/bi/dashboard` | KPIs: stock total por almacén, movimientos hoy (entradas/salidas), productos, bajo mínimo, `lotesEnAlerta` (P3), últimos movimientos |
 | GET | `/bi/comparativa-almacenes` | movimientos por almacén en rango |
 | GET | `/bi/tendencia` | movimientos por día (14/30 días) |
 | GET | `/bi/bajo-minimo` | consolidado de alertas |
@@ -128,8 +131,42 @@ Separador `;` + BOM UTF-8 (Excel es-ES), descarga con `Content-Disposition`.
 | Método | Ruta | Contenido |
 |---|---|---|
 | GET | `/movimiento-inventario/exportar?almacenId=&tipo=` | Kardex completo (tope 10.000 filas) |
-| GET | `/movimiento-inventario/stock/exportar?almacenId=` | Stock derivado por producto/almacén |
+| GET | `/movimiento-inventario/stock/exportar?almacenId=` | Stock derivado por producto/almacén (+ columna Bin, P3) |
+| GET | `/movimiento-inventario/lotes/exportar?almacenId=&productoId=&diasProximo=` | Stock por lote con estado de caducidad (P3) |
 | GET | `/conteo-inventario/:id/exportar` | Informe del conteo con diferencias |
+
+### Variantes de producto (backlog P3 — implementado)
+**Patrón Zoho/BoxHero**: cada variante es un producto COMPLETO (SKU propio PRD-XXXXXX,
+stock, kardex y etiquetas QR propios) enlazado a su SKU padre con `productoPadreId`;
+un solo nivel de agrupación (el padre nunca tiene padre) y unicidad de combinación de
+atributos bajo el mismo padre. El `nombre` de la variante se deriva (`Padre (Talla: M · Color: Rojo)`)
+y el listado de productos muestra la columna `Variante` (`atributosResumen`).
+
+| Método | Ruta | Roles | Notas |
+|---|---|---|---|
+| POST | `/producto/:id/variantes` | ADMIN, JEFE | `{atributos: [{clave, valor}]}` → crea la variante heredando categoría/unidad/umbrales del padre |
+| GET | `/producto/:id/variantes` | ADMIN, JEFE, OPERARIO | Variantes activas del padre (ReadProductoDto) |
+| PUT | `/producto/:id/atributos` | ADMIN, JEFE | `{atributos: [{clave, valor}]}` → recalcula resumen y nombre (solo variantes) |
+
+Las etiquetas QR no cambian: una variante es un producto y sus QR referencian su SKU.
+
+### Ubicaciones internas — bins por producto/almacén (backlog P3 — implementado)
+**Patrón Sortly/Odoo**: el nomenclador `nom_ubicacion` describe los racks/estantes;
+`producto_ubicacion` es el vínculo producto→bin por almacén. Regla: **una ubicación
+activa por par producto+almacén** (reasignar = editar o borrar y recrear).
+
+| Método | Ruta | Roles | Notas |
+|---|---|---|---|
+| GET | `/producto-ubicacion` | ADMIN, JEFE, OPERARIO | Listado paginado (`almacenId`, `productoId`, `sinPaginacion`) |
+| GET | `/producto-ubicacion/producto/:productoId` | ADMIN, JEFE, OPERARIO | Bins de un producto en todos sus almacenes (ficha web) |
+| GET | `/producto-ubicacion/resolver?productoId=&almacenId=` | ADMIN, JEFE, OPERARIO | Bin para la ficha del escáner → `{ubicacionNombre\|null}` |
+| GET | `/producto-ubicacion/select-ubicaciones?almacenId=` | ADMIN, JEFE, OPERARIO | Combo de ubicaciones activas (filtra por almacén dueño) |
+| POST | `/producto-ubicacion` | ADMIN, JEFE | `{productoId, almacenId, ubicacionId}` (409 si ya existe bin para el par) |
+| PUT | `/producto-ubicacion/:id` | ADMIN, JEFE | `{ubicacionId}` reasignar |
+| DELETE | `/producto-ubicacion/:id` | ADMIN, JEFE | Soft-delete |
+
+El stock (`/movimiento-inventario/stock`), su CSV y la ficha del escáner muestran el bin;
+la APK lo cachea en `producto_ubicacion_cache` (DB v5) vía `bins` del sync.
 
 ## Admin (heredado, contratos idénticos a SACP)
 
